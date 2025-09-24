@@ -21,7 +21,6 @@ use tauri::{
     path::BaseDirectory, utils::config::WindowConfig, AppHandle, Emitter, LogicalSize, Manager,
 };
 use tauri_plugin_http::reqwest;
-use tokio::time::{sleep, Duration};
 use walkdir::WalkDir;
 use warp::Filter;
 use zip::write::FileOptions;
@@ -135,6 +134,7 @@ pub async fn preview_from_config(
     config: WindowConfig,
     js_content: String,
     devbug: bool,
+    icon_base64: String,
 ) {
     let window_label = "PreView";
     if let Some(existing_window) = handle.get_webview_window(window_label) {
@@ -166,9 +166,20 @@ pub async fn preview_from_config(
     if !resize {
         let pre_window = tauri::WebviewWindowBuilder::from_config(&handle, &config)
             .unwrap()
+            .title(config.title)
             .initialization_script(contents.as_str())
             .build()
             .unwrap();
+        // set icon
+        #[cfg(target_os = "windows")]
+        if icon_base64.len() > 0 {
+            use tauri::image::Image;
+            let icon_decode =
+                BASE64_STANDARD.decode(icon_base64.replace("data:image/png;base64,", "").trim());
+            let icon_bytes = icon_decode.unwrap();
+            let png_image = Image::from_bytes(&icon_bytes).unwrap();
+            pre_window.set_icon(png_image).unwrap();
+        }
         pre_window.on_window_event(move |event| {
             if let WindowEvent::Destroyed = event {
                 handle.emit("stop_server", "0").unwrap();
